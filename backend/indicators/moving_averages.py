@@ -26,7 +26,31 @@ def compute_moving_averages(df: pd.DataFrame) -> dict:
         "sma_50":  latest_sma_50,
         "sma_200": latest_sma_200,
         "trend":   trend,
+        "series":  _build_series(df.index, close, sma_20, sma_50, sma_200),
     }
+
+
+def _build_series(
+    dates,
+    close: pd.Series,
+    sma_20: pd.Series,
+    sma_50: pd.Series,
+    sma_200: pd.Series,
+) -> list[dict]:
+    def val(series, i):
+        v = series.iloc[i]
+        return round(float(v), 4) if not pd.isna(v) else None
+
+    return [
+        {
+            "date": dates[i].strftime("%Y-%m-%d"),
+            "close": val(close, i),
+            "sma_20": val(sma_20, i),
+            "sma_50": val(sma_50, i),
+            "sma_200": val(sma_200, i),
+        }
+        for i in range(len(dates))
+    ]
 
 
 def _classify_trend(

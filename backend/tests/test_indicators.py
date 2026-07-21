@@ -1,5 +1,5 @@
 import pandas as pd
-from backend.indicators.moving_averages import compute_sma, _classify_trend
+from backend.indicators.moving_averages import compute_sma, _classify_trend, _build_series
 
 
 def make_close(n=250, start=100.0):
@@ -31,3 +31,15 @@ def test_trend_strong_bearish():
 
 def test_trend_neutral_when_none():
     assert _classify_trend(100, None, None, None) == "neutral"
+
+
+def test_build_series_length_and_shape():
+    close = make_close(30)
+    dates = pd.date_range("2024-01-01", periods=30)
+    sma_20 = compute_sma(close, 20)
+    series = _build_series(dates, close, sma_20, sma_20, sma_20)
+
+    assert len(series) == 30
+    assert series[0]["sma_20"] is None
+    assert series[-1]["date"] == "2024-01-30"
+    assert series[-1]["close"] == round(float(close.iloc[-1]), 4)

@@ -40,6 +40,7 @@ def moving_averages(request):
             "sma_200": ma_data["sma_200"],
         },
         "trend": ma_data["trend"],
+        "series": ma_data["series"],
     })
 
 
