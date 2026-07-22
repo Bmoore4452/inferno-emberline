@@ -28,6 +28,56 @@ export type MovingAveragesResponse = {
   series: SeriesPoint[];
 };
 
+export type Leader = {
+  ticker: string;
+  sector: string;
+  price: number;
+  ytd_return_pct: number;
+  outperformance_pct: number;
+};
+
+export type LeadersResponse = {
+  benchmark_ytd_return_pct: number;
+  outperformance_threshold_pct: number;
+  leaders: Leader[];
+};
+
+export type PathStage =
+  | "at_new_highs"
+  | "pulled_back_above_path"
+  | "entry_1_path_reclaim"
+  | "below_path_above_sma20"
+  | "entry_2_sma20_reclaim"
+  | "below_sma20_invalidated"
+  | "insufficient_history";
+
+export type PathSetup = {
+  ticker: string;
+  ath: number | null;
+  path: number | null;
+  last_close: number;
+  sma20: number | null;
+  stage: PathStage;
+  high_volume: boolean;
+  volume_vs_avg: number | null;
+  error?: string;
+};
+
+export type PathSetupsResponse = {
+  tickers: string[];
+  results: PathSetup[];
+};
+
+export type PathSeriesPoint = {
+  date: string;
+  close: number | null;
+  sma_20: number | null;
+};
+
+export type PathDetailResponse = PathSetup & {
+  series: PathSeriesPoint[];
+};
+
 export type ApiError = { error: string; detail?: string };
 
 const API_BASE_URL =
@@ -40,18 +90,10 @@ export class ApiRequestError extends Error {
   }
 }
 
-export async function fetchMovingAverages(
-  ticker: string,
-  period: string,
-  signal?: AbortSignal,
-): Promise<MovingAveragesResponse> {
-  const url = `${API_BASE_URL}/indicators/moving-averages/?ticker=${encodeURIComponent(
-    ticker,
-  )}&period=${encodeURIComponent(period)}`;
-
+async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(url, { signal });
+    res = await fetch(`${API_BASE_URL}${path}`, { signal });
   } catch {
     throw new ApiRequestError(
       "Couldn't reach the Emberline API. Is the backend running?",
@@ -64,4 +106,36 @@ export async function fetchMovingAverages(
   }
 
   return res.json();
+}
+
+export function fetchMovingAverages(
+  ticker: string,
+  period: string,
+  signal?: AbortSignal,
+): Promise<MovingAveragesResponse> {
+  return apiGet(
+    `/indicators/moving-averages/?ticker=${encodeURIComponent(ticker)}&period=${encodeURIComponent(period)}`,
+    signal,
+  );
+}
+
+export function fetchLeaders(signal?: AbortSignal): Promise<LeadersResponse> {
+  return apiGet(`/scanner/leaders/`, signal);
+}
+
+export function fetchPathSetups(
+  tickers: string[],
+  signal?: AbortSignal,
+): Promise<PathSetupsResponse> {
+  const query = tickers.length
+    ? `?tickers=${encodeURIComponent(tickers.join(","))}`
+    : "";
+  return apiGet(`/scanner/path-setups/${query}`, signal);
+}
+
+export function fetchPathDetail(
+  ticker: string,
+  signal?: AbortSignal,
+): Promise<PathDetailResponse> {
+  return apiGet(`/scanner/path-setups/${encodeURIComponent(ticker)}/`, signal);
 }

@@ -4,6 +4,9 @@ from rest_framework import status
 
 from backend.data.fetcher import fetch_ohlcv
 from backend.indicators.moving_averages import compute_moving_averages
+from backend.scanner.leaders import scan_leaders
+from backend.scanner.path_scanner import scan_path_setups, get_path_detail
+from backend.scanner.universe import LEADERS_CANDIDATES
 
 
 @api_view(["GET"])
@@ -42,6 +45,47 @@ def moving_averages(request):
         "trend": ma_data["trend"],
         "series": ma_data["series"],
     })
+
+
+@api_view(["GET"])
+def leaders_scan(request):
+    try:
+        result = scan_leaders()
+    except ValueError as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({"error": "Unexpected error.", "detail": str(e)}, status=500)
+
+    return Response(result)
+
+
+@api_view(["GET"])
+def path_setups_scan(request):
+    tickers_param = request.query_params.get("tickers", "").strip()
+    tickers = (
+        [t.strip().upper() for t in tickers_param.split(",") if t.strip()]
+        if tickers_param
+        else list(LEADERS_CANDIDATES.keys())
+    )
+
+    try:
+        results = scan_path_setups(tickers)
+    except Exception as e:
+        return Response({"error": "Unexpected error.", "detail": str(e)}, status=500)
+
+    return Response({"tickers": tickers, "results": results})
+
+
+@api_view(["GET"])
+def path_setup_detail(request, ticker):
+    try:
+        result = get_path_detail(ticker)
+    except ValueError as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({"error": "Unexpected error.", "detail": str(e)}, status=500)
+
+    return Response(result)
 
 
 @api_view(["GET"])
