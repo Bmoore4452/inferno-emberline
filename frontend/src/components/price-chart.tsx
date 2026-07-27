@@ -64,61 +64,63 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps) {
 export function PriceChart({ series }: { series: SeriesPoint[] }) {
   return (
     <div className="w-full">
-      <div className="h-90 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="closeFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-chart-2)" stopOpacity={0.18} />
-                <stop offset="100%" stopColor="var(--color-chart-2)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="var(--color-border)"
-              vertical={false}
-            />
-            <XAxis
-              dataKey="date"
-              tickFormatter={formatDate}
-              tick={{ fill: "var(--color-muted-foreground)", fontSize: 12 }}
-              axisLine={{ stroke: "var(--color-border)" }}
-              tickLine={false}
-              minTickGap={48}
-            />
-            <YAxis
-              domain={["auto", "auto"]}
-              tick={{ fill: "var(--color-muted-foreground)", fontSize: 12 }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v: number) => `$${v.toFixed(0)}`}
-              width={56}
-            />
-            <Tooltip content={(props) => <ChartTooltip {...props} />} />
-            <Area
-              type="monotone"
-              dataKey="close"
-              stroke="none"
-              fill="url(#closeFill)"
-              isAnimationActive
-            />
-            {LINES.map((line, i) => (
-              <Line
-                key={line.key}
-                type="monotone"
-                dataKey={line.key}
-                name={line.label}
-                stroke={line.color}
-                strokeWidth={line.width}
-                dot={false}
-                isAnimationActive
-                animationDuration={900}
-                animationEasing="ease-out"
-                animationBegin={i * 120}
+      <div className="overflow-x-auto">
+        <div className="h-90 w-full min-w-[560px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="closeFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--color-chart-2)" stopOpacity={0.18} />
+                  <stop offset="100%" stopColor="var(--color-chart-2)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="var(--color-border)"
+                vertical={false}
               />
-            ))}
-          </ComposedChart>
-        </ResponsiveContainer>
+              <XAxis
+                dataKey="date"
+                tickFormatter={formatDate}
+                tick={{ fill: "var(--color-muted-foreground)", fontSize: 12 }}
+                axisLine={{ stroke: "var(--color-border)" }}
+                tickLine={false}
+                minTickGap={48}
+              />
+              <YAxis
+                domain={["auto", "auto"]}
+                tick={{ fill: "var(--color-muted-foreground)", fontSize: 12 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v: number) => `$${v.toFixed(0)}`}
+                width={56}
+              />
+              <Tooltip content={(props) => <ChartTooltip {...props} />} />
+              <Area
+                type="monotone"
+                dataKey="close"
+                stroke="none"
+                fill="url(#closeFill)"
+                isAnimationActive
+              />
+              {LINES.map((line, i) => (
+                <Line
+                  key={line.key}
+                  type="monotone"
+                  dataKey={line.key}
+                  name={line.label}
+                  stroke={line.color}
+                  strokeWidth={line.width}
+                  dot={false}
+                  isAnimationActive
+                  animationDuration={900}
+                  animationEasing="ease-out"
+                  animationBegin={i * 120}
+                />
+              ))}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
         {LINES.map((line) => (

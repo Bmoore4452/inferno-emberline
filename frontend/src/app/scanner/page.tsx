@@ -87,7 +87,7 @@ export default function ScannerPage() {
     <div className="flex min-h-screen flex-col">
       <SiteHeader />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 py-12">
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-12 sm:px-6">
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -254,7 +254,7 @@ export default function ScannerPage() {
       </main>
 
       <footer className="border-t border-border/60 py-6">
-        <div className="mx-auto max-w-5xl px-6 text-xs text-muted-foreground">
+        <div className="mx-auto max-w-5xl px-4 text-xs sm:px-6 text-muted-foreground">
           Market data via yfinance. For research purposes only — not
           investment advice.
         </div>

@@ -16,7 +16,7 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-10 border-b border-border/60 bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2">
             <Flame className="h-5 w-5 text-primary" />
@@ -24,7 +24,10 @@ export function SiteHeader() {
               Emberline
             </span>
           </div>
-          <nav className="flex items-center gap-1">
+          {/* Nav lives here on larger screens; on mobile it moves to the
+              fixed bottom tab bar (see MobileTabBar) where there's no
+              risk of crowding out the brand or theme toggle. */}
+          <nav className="hidden items-center gap-1 sm:flex">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href;
               return (

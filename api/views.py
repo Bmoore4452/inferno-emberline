@@ -78,8 +78,15 @@ def path_setups_scan(request):
 
 @api_view(["GET"])
 def path_setup_detail(request, ticker):
+    interval = request.query_params.get("interval", "1d").strip()
+    if interval not in {"1d", "1h"}:
+        return Response(
+            {"error": f"Invalid interval '{interval}'. Use '1d' or '1h'."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     try:
-        result = get_path_detail(ticker)
+        result = get_path_detail(ticker, interval=interval)
     except ValueError as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
