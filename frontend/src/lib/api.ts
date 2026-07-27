@@ -74,8 +74,23 @@ export type PathSeriesPoint = {
   sma_20: number | null;
 };
 
+export type ChartInterval = "1d" | "1h";
+
+export const FIB_RATIOS = ["0.236", "0.382", "0.5", "0.618", "0.786"] as const;
+export type FibRatio = (typeof FIB_RATIOS)[number];
+export const GOLDEN_RATIO: FibRatio = "0.618";
+
+export type FibonacciLevels = {
+  swing_low: number;
+  swing_high: number;
+  levels: Record<FibRatio, number>;
+  golden_ratio: number;
+};
+
 export type PathDetailResponse = PathSetup & {
   series: PathSeriesPoint[];
+  fibonacci: FibonacciLevels | null;
+  interval: ChartInterval;
 };
 
 export type ApiError = { error: string; detail?: string };
@@ -135,7 +150,11 @@ export function fetchPathSetups(
 
 export function fetchPathDetail(
   ticker: string,
+  interval: ChartInterval = "1d",
   signal?: AbortSignal,
 ): Promise<PathDetailResponse> {
-  return apiGet(`/scanner/path-setups/${encodeURIComponent(ticker)}/`, signal);
+  return apiGet(
+    `/scanner/path-setups/${encodeURIComponent(ticker)}/?interval=${interval}`,
+    signal,
+  );
 }

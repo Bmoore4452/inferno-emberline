@@ -15,6 +15,7 @@ import { PathChart } from "@/components/path-chart";
 import {
   fetchPathDetail,
   ApiRequestError,
+  type ChartInterval,
   type PathDetailResponse,
 } from "@/lib/api";
 
@@ -31,43 +32,63 @@ export default function PathDetailPage({
   const [status, setStatus] = useState<Status>("loading");
   const [data, setData] = useState<PathDetailResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [chartInterval, setChartInterval] = useState<ChartInterval>("1d");
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartError, setChartError] = useState("");
   const activeRequest = useRef<AbortController | null>(null);
 
-  function runFetch() {
+  function runFetch(interval: ChartInterval, { isInitial = false } = {}) {
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
 
-    setStatus("loading");
-    setErrorMessage("");
+    if (isInitial) {
+      setStatus("loading");
+      setErrorMessage("");
+    } else {
+      setChartLoading(true);
+      setChartError("");
+    }
 
-    fetchPathDetail(symbol, controller.signal)
+    fetchPathDetail(symbol, interval, controller.signal)
       .then((result) => {
         setData(result);
         setStatus("success");
+        setChartLoading(false);
       })
       .catch((err) => {
         if (err?.name === "AbortError") return;
-        setStatus("error");
-        setErrorMessage(
+        setChartLoading(false);
+        const message =
           err instanceof ApiRequestError
             ? err.message
-            : "Something went wrong loading this ticker.",
-        );
+            : "Something went wrong loading this ticker.";
+        if (isInitial) {
+          setStatus("error");
+          setErrorMessage(message);
+        } else {
+          setChartError(message);
+        }
       });
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetching from the API, an external system
-    runFetch();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting view state for a new ticker
+    setChartInterval("1d");
+    runFetch("1d", { isInitial: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol]);
+
+  function handleIntervalChange(interval: ChartInterval) {
+    setChartInterval(interval);
+    runFetch(interval);
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
       <SiteHeader />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 py-12">
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-12 sm:px-6">
         <Link
           href="/scanner"
           className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -108,7 +129,11 @@ export default function PathDetailPage({
                 <AlertTitle>Couldn&apos;t load {symbol}</AlertTitle>
                 <AlertDescription>{errorMessage}</AlertDescription>
               </Alert>
-              <Button variant="outline" className="mt-4" onClick={runFetch}>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => runFetch("1d", { isInitial: true })}
+              >
                 Retry
               </Button>
             </motion.div>
@@ -170,7 +195,23 @@ export default function PathDetailPage({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <PathChart series={data.series} ath={data.ath} path={data.path} />
+                  {chartError && (
+                    <Alert variant="destructive" className="mb-4">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>Couldn&apos;t load hourly data</AlertTitle>
+                      <AlertDescription>{chartError}</AlertDescription>
+                    </Alert>
+                  )}
+                  <div className={chartLoading ? "opacity-50 transition-opacity" : ""}>
+                    <PathChart
+                      series={data.series}
+                      ath={data.ath}
+                      path={data.path}
+                      fibonacci={data.fibonacci}
+                      interval={chartInterval}
+                      onIntervalChange={handleIntervalChange}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
@@ -179,7 +220,7 @@ export default function PathDetailPage({
       </main>
 
       <footer className="border-t border-border/60 py-6">
-        <div className="mx-auto max-w-5xl px-6 text-xs text-muted-foreground">
+        <div className="mx-auto max-w-5xl px-4 text-xs sm:px-6 text-muted-foreground">
           Market data via yfinance. For research purposes only — not
           investment advice.
         </div>

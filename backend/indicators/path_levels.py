@@ -1,6 +1,50 @@
 import pandas as pd
 from typing import Optional
 
+# The standard Fibonacci retracement ratios; 0.618 is the "golden ratio" level.
+FIB_RATIOS = (0.236, 0.382, 0.5, 0.618, 0.786)
+GOLDEN_RATIO = 0.618
+
+
+def _confirmed_pivots(
+    close: pd.Series, end_idx: int, min_pullback_pct: float
+) -> list[tuple[int, float, str]]:
+    """Confirmed zigzag swing pivots -- (index, price, 'high'|'low') -- found
+    scanning close[0:end_idx+1]. Each pivot requires a min_pullback_pct
+    reversal to confirm, which filters day-to-day noise from genuine swings."""
+    pivots: list[tuple[int, float, str]] = []
+    direction: Optional[str] = None
+    extreme_idx = 0
+    extreme_price = float(close.iloc[0])
+
+    for i in range(1, end_idx + 1):
+        price = float(close.iloc[i])
+        if direction is None:
+            if price >= extreme_price * (1 + min_pullback_pct):
+                direction = "up"
+                extreme_idx, extreme_price = i, price
+            elif price <= extreme_price * (1 - min_pullback_pct):
+                direction = "down"
+                extreme_idx, extreme_price = i, price
+            continue
+
+        if direction == "up":
+            if price > extreme_price:
+                extreme_idx, extreme_price = i, price
+            elif price <= extreme_price * (1 - min_pullback_pct):
+                pivots.append((extreme_idx, extreme_price, "high"))
+                direction = "down"
+                extreme_idx, extreme_price = i, price
+        else:
+            if price < extreme_price:
+                extreme_idx, extreme_price = i, price
+            elif price >= extreme_price * (1 + min_pullback_pct):
+                pivots.append((extreme_idx, extreme_price, "low"))
+                direction = "up"
+                extreme_idx, extreme_price = i, price
+
+    return pivots
+
 
 def find_ath_and_path(
     close: pd.Series, min_pullback_pct: float = 0.10
@@ -13,11 +57,6 @@ def find_ath_and_path(
     a pullback. Requiring a minimum drawdown filters out noise: every tick on
     the way up to a new high is technically "a new high", but only a genuine
     pullback-then-breakout establishes a level worth calling PATH.
-
-    Implemented as a forward zigzag scan (alternating confirmed swing highs
-    and lows, each requiring a `min_pullback_pct` reversal to confirm) run
-    over the history up to the all-time-high bar; PATH is the last swing high
-    the scan confirmed before that bar.
     """
     if close.empty:
         return None, None
@@ -29,36 +68,51 @@ def find_ath_and_path(
     if ath_idx == 0:
         return ath, None
 
-    last_confirmed_high = None
-    direction: Optional[str] = None
-    extreme_price = float(close.iloc[0])
+    highs = [p for p in _confirmed_pivots(close, ath_idx, min_pullback_pct) if p[2] == "high"]
+    path = highs[-1][1] if highs else None
+    return ath, path
 
-    for i in range(1, ath_idx + 1):
-        price = float(close.iloc[i])
-        if direction is None:
-            if price >= extreme_price * (1 + min_pullback_pct):
-                direction = "up"
-                extreme_price = price
-            elif price <= extreme_price * (1 - min_pullback_pct):
-                direction = "down"
-                extreme_price = price
-            continue
 
-        if direction == "up":
-            if price > extreme_price:
-                extreme_price = price
-            elif price <= extreme_price * (1 - min_pullback_pct):
-                last_confirmed_high = extreme_price
-                direction = "down"
-                extreme_price = price
-        else:
-            if price < extreme_price:
-                extreme_price = price
-            elif price >= extreme_price * (1 + min_pullback_pct):
-                direction = "up"
-                extreme_price = price
+def find_swing_low_before_ath(
+    close: pd.Series, min_pullback_pct: float = 0.10
+) -> Optional[float]:
+    """The most recent confirmed swing low before the all-time high -- i.e.
+    where the rally to the current ATH began. Paired with the ATH, this is
+    the anchor leg for Fibonacci retracement levels."""
+    if close.empty:
+        return None
 
-    return ath, last_confirmed_high
+    close = close.reset_index(drop=True)
+    ath_idx = int(close.values.argmax())
+    if ath_idx == 0:
+        return None
+
+    lows = [p for p in _confirmed_pivots(close, ath_idx, min_pullback_pct) if p[2] == "low"]
+    return lows[-1][1] if lows else None
+
+
+def compute_fibonacci_levels(
+    close: pd.Series, min_pullback_pct: float = 0.10
+) -> Optional[dict]:
+    """Fibonacci retracement levels for the rally leg from the swing low
+    before the ATH up to the ATH itself. Returns None when that leg can't be
+    established (e.g. the stock rallied to its ATH with no confirmed pullback
+    along the way)."""
+    ath, _ = find_ath_and_path(close, min_pullback_pct=min_pullback_pct)
+    swing_low = find_swing_low_before_ath(close, min_pullback_pct=min_pullback_pct)
+
+    if ath is None or swing_low is None or ath <= swing_low:
+        return None
+
+    span = ath - swing_low
+    levels = {str(ratio): round(ath - span * ratio, 2) for ratio in FIB_RATIOS}
+
+    return {
+        "swing_low": round(swing_low, 2),
+        "swing_high": round(ath, 2),
+        "levels": levels,
+        "golden_ratio": levels[str(GOLDEN_RATIO)],
+    }
 
 
 def classify_path_setup(

@@ -69,7 +69,11 @@ export function TickerSearch({
         <Tabs value={period} onValueChange={onPeriodChange}>
           <TabsList>
             {PERIODS.map((p) => (
-              <TabsTrigger key={p.value} value={p.value} className="min-w-11">
+              <TabsTrigger
+                key={p.value}
+                value={p.value}
+                className="min-w-8 px-1 text-xs sm:min-w-11 sm:px-1.5 sm:text-sm"
+              >
                 {p.label}
               </TabsTrigger>
             ))}

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
+import { MobileTabBar } from "@/components/mobile-tab-bar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -32,7 +33,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col pb-16 sm:pb-0">
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
@@ -41,6 +42,7 @@ export default function RootLayout({
         >
           <TooltipProvider delay={200}>
             {children}
+            <MobileTabBar />
             <Toaster position="bottom-right" />
           </TooltipProvider>
         </ThemeProvider>
