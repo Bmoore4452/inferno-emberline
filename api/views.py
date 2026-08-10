@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import connection, transaction
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
@@ -65,6 +65,35 @@ def _persist_watchlist(leaders: list[dict]) -> list[LeaderPick]:
     return _watchlist_picks()
 
 
+# Arbitrary constant identifying the watchlist-seed critical section for
+# pg_advisory_xact_lock. Only matters that it's consistent across callers.
+_SEED_LOCK_KEY = 725017
+
+
+def _seed_watchlist_if_empty() -> tuple[list[LeaderPick], dict | None]:
+    """First-ever GET populates the watchlist. Concurrent cold-start
+    requests can otherwise all see an empty table and each independently
+    reseed, with the last write silently clobbering the others' rows --
+    so the scan (slow, network-bound) runs unlocked, but the empty-check
+    and write are re-verified under a Postgres advisory lock, letting a
+    late-arriving request discard its own scan in favor of whatever the
+    lock-holder already committed. Returns the freshly scanned result too,
+    as a fallback for the rare case where zero candidates qualify."""
+    picks = _watchlist_picks()
+    if picks:
+        return picks, None
+
+    fresh = scan_leaders()
+
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(%s)", [_SEED_LOCK_KEY])
+        picks = _watchlist_picks()
+        if not picks:
+            picks = _persist_watchlist(fresh["leaders"])
+    return picks, fresh
+
+
 def _watchlist_result(picks: list[LeaderPick]) -> dict:
     candidates = {pick.ticker: pick.sector for pick in picks}
     result = get_leaders_stats(candidates)
@@ -75,13 +104,8 @@ def _watchlist_result(picks: list[LeaderPick]) -> dict:
 @api_view(["GET"])
 def leaders_scan(request):
     try:
-        picks = _watchlist_picks()
-        if not picks:
-            fresh = scan_leaders()
-            picks = _persist_watchlist(fresh["leaders"])
-            result = _watchlist_result(picks) if picks else fresh
-        else:
-            result = _watchlist_result(picks)
+        picks, fresh = _seed_watchlist_if_empty()
+        result = _watchlist_result(picks) if picks else fresh
     except ValueError as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:

@@ -1,12 +1,10 @@
+.env
+.env.*
+!.env.example
+venv/
 __pycache__/
 *.py[cod]
-venv/
-.env
 *.sqlite3
-.DS_Store
-.vscode/
 .pytest_cache/
 staticfiles/
-node_modules/
-.vercel
-.env*
+frontend/
