@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, RefreshCw, Volume2 } from "lucide-react";
+import { AlertTriangle, RefreshCw, RotateCcw, Volume2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -22,6 +22,7 @@ import { StageBadge } from "@/components/stage-badge";
 import {
   fetchLeaders,
   fetchPathSetups,
+  refreshLeaders,
   ApiRequestError,
   type Leader,
   type PathSetup,
@@ -36,7 +37,9 @@ export default function ScannerPage() {
   const [status, setStatus] = useState<Status>("loading");
   const [rows, setRows] = useState<Row[]>([]);
   const [benchmark, setBenchmark] = useState<{ ytd: number; threshold: number } | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [regenerating, setRegenerating] = useState(false);
   const activeRequest = useRef<AbortController | null>(null);
 
   function runScan() {
@@ -53,6 +56,7 @@ export default function ScannerPage() {
           ytd: leadersRes.benchmark_ytd_return_pct,
           threshold: leadersRes.outperformance_threshold_pct,
         });
+        setGeneratedAt(leadersRes.generated_at);
         const tickers = leadersRes.leaders.map((l) => l.ticker);
         const pathRes = tickers.length
           ? await fetchPathSetups(tickers, controller.signal)
@@ -78,6 +82,31 @@ export default function ScannerPage() {
       });
   }
 
+  async function handleRegenerate() {
+    if (
+      !window.confirm(
+        "Regenerate the watchlist? This replaces the current tickers with a fresh top-20 scan.",
+      )
+    ) {
+      return;
+    }
+
+    setRegenerating(true);
+    try {
+      await refreshLeaders();
+      runScan();
+    } catch (err) {
+      setStatus("error");
+      setErrorMessage(
+        err instanceof ApiRequestError
+          ? err.message
+          : "Couldn't regenerate the watchlist.",
+      );
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetching from the API, an external system
     runScan();
@@ -99,22 +128,36 @@ export default function ScannerPage() {
               Leaders scanner
             </h1>
             <p className="mt-2 max-w-xl text-muted-foreground">
-              Stocks outperforming the S&amp;P 500 by 2x YTD across Tech/AI/Semis,
-              Energy, Equipment, and Gas/Oil, tracked against their PATH
-              breakout-retest setup.
+              A fixed watchlist of up to 20 leaders outperforming the S&amp;P
+              500 by 2x YTD across Tech/AI/Semis, Energy, Equipment, and
+              Gas/Oil, tracked against their PATH breakout-retest / pullback
+              setup. The list only changes when you regenerate it.
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={runScan}
-            disabled={status === "loading"}
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${status === "loading" ? "animate-spin" : ""}`}
-            />
-            Rescan
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={runScan}
+              disabled={status === "loading" || regenerating}
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${status === "loading" ? "animate-spin" : ""}`}
+              />
+              Rescan
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRegenerate}
+              disabled={status === "loading" || regenerating}
+            >
+              <RotateCcw
+                className={`h-3.5 w-3.5 ${regenerating ? "animate-spin" : ""}`}
+              />
+              Regenerate watchlist
+            </Button>
+          </div>
         </motion.div>
 
         {benchmark && (
@@ -127,6 +170,19 @@ export default function ScannerPage() {
             <span className="font-medium text-foreground">
               {benchmark.threshold.toFixed(2)}%
             </span>
+            {generatedAt && (
+              <>
+                {" "}
+                &middot; watchlist locked{" "}
+                <span className="font-medium text-foreground">
+                  {new Date(generatedAt).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                </span>
+              </>
+            )}
           </p>
         )}
 
@@ -218,7 +274,20 @@ export default function ScannerPage() {
                               +{row.ytd_return_pct.toFixed(1)}%
                             </TableCell>
                             <TableCell className="text-right tabular-nums text-muted-foreground">
-                              +{row.outperformance_pct.toFixed(1)}%
+                              {row.meets_criteria === false ? (
+                                <Tooltip>
+                                  <TooltipTrigger className="inline-flex items-center gap-1">
+                                    <AlertTriangle className="h-3 w-3 text-watching" />
+                                    {row.outperformance_pct.toFixed(1)}%
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    No longer clears the 2x SPX / SMA bar —
+                                    still tracked since the watchlist is fixed.
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                <>+{row.outperformance_pct.toFixed(1)}%</>
+                              )}
                             </TableCell>
                             <TableCell>
                               {row.stage ? (

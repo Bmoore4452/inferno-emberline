@@ -1,12 +1,15 @@
+from django.db import transaction
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 
 from backend.data.fetcher import fetch_ohlcv
 from backend.indicators.moving_averages import compute_moving_averages
-from backend.scanner.leaders import scan_leaders
+from backend.scanner.leaders import scan_leaders, get_leaders_stats, WATCHLIST_SIZE
 from backend.scanner.path_scanner import scan_path_setups, get_path_detail
 from backend.scanner.universe import LEADERS_CANDIDATES
+
+from .models import LeaderPick
 
 
 @api_view(["GET"])
@@ -47,10 +50,55 @@ def moving_averages(request):
     })
 
 
+def _watchlist_picks() -> list[LeaderPick]:
+    return list(LeaderPick.objects.order_by("rank"))
+
+
+@transaction.atomic
+def _persist_watchlist(leaders: list[dict]) -> list[LeaderPick]:
+    LeaderPick.objects.all().delete()
+    picks = [
+        LeaderPick(ticker=leader["ticker"], sector=leader["sector"], rank=i + 1)
+        for i, leader in enumerate(leaders[:WATCHLIST_SIZE])
+    ]
+    LeaderPick.objects.bulk_create(picks)
+    return _watchlist_picks()
+
+
+def _watchlist_result(picks: list[LeaderPick]) -> dict:
+    candidates = {pick.ticker: pick.sector for pick in picks}
+    result = get_leaders_stats(candidates)
+    result["generated_at"] = picks[0].added_at.isoformat() if picks else None
+    return result
+
+
 @api_view(["GET"])
 def leaders_scan(request):
     try:
-        result = scan_leaders()
+        picks = _watchlist_picks()
+        if not picks:
+            fresh = scan_leaders()
+            picks = _persist_watchlist(fresh["leaders"])
+            result = _watchlist_result(picks) if picks else fresh
+        else:
+            result = _watchlist_result(picks)
+    except ValueError as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({"error": "Unexpected error.", "detail": str(e)}, status=500)
+
+    return Response(result)
+
+
+@api_view(["POST"])
+def leaders_refresh(request):
+    """Explicitly regenerate the persisted watchlist from a fresh scan.
+    The GET endpoint never does this on its own -- membership only changes
+    here, so the list stays stable to study between refreshes."""
+    try:
+        fresh = scan_leaders()
+        picks = _persist_watchlist(fresh["leaders"])
+        result = _watchlist_result(picks) if picks else fresh
     except ValueError as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
@@ -62,11 +110,11 @@ def leaders_scan(request):
 @api_view(["GET"])
 def path_setups_scan(request):
     tickers_param = request.query_params.get("tickers", "").strip()
-    tickers = (
-        [t.strip().upper() for t in tickers_param.split(",") if t.strip()]
-        if tickers_param
-        else list(LEADERS_CANDIDATES.keys())
-    )
+    if tickers_param:
+        tickers = [t.strip().upper() for t in tickers_param.split(",") if t.strip()]
+    else:
+        watchlist = [pick.ticker for pick in _watchlist_picks()]
+        tickers = watchlist or list(LEADERS_CANDIDATES.keys())
 
     try:
         results = scan_path_setups(tickers)

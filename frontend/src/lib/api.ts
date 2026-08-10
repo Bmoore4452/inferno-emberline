@@ -34,12 +34,14 @@ export type Leader = {
   price: number;
   ytd_return_pct: number;
   outperformance_pct: number;
+  meets_criteria: boolean;
 };
 
 export type LeadersResponse = {
   benchmark_ytd_return_pct: number;
   outperformance_threshold_pct: number;
   leaders: Leader[];
+  generated_at: string | null;
 };
 
 export type PathStage =
@@ -95,8 +97,11 @@ export type PathDetailResponse = PathSetup & {
 
 export type ApiError = { error: string; detail?: string };
 
+// Local dev sets NEXT_PUBLIC_API_URL in .env.local (localhost:8000). The
+// fallback below is the deployed demo backend, used when no env var is
+// configured for a given deployment (e.g. this POC's Vercel project).
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+  process.env.NEXT_PUBLIC_API_URL ?? "https://emberline-backend.vercel.app/api/v1";
 
 export class ApiRequestError extends Error {
   constructor(message: string) {
@@ -105,10 +110,13 @@ export class ApiRequestError extends Error {
   }
 }
 
-async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+async function apiRequest<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, { signal });
+    res = await fetch(`${API_BASE_URL}${path}`, init);
   } catch {
     throw new ApiRequestError(
       "Couldn't reach the Emberline API. Is the backend running?",
@@ -121,6 +129,10 @@ async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   }
 
   return res.json();
+}
+
+function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return apiRequest(path, { signal });
 }
 
 export function fetchMovingAverages(
@@ -136,6 +148,12 @@ export function fetchMovingAverages(
 
 export function fetchLeaders(signal?: AbortSignal): Promise<LeadersResponse> {
   return apiGet(`/scanner/leaders/`, signal);
+}
+
+// Regenerates the persisted 20-ticker watchlist from a fresh scan. The
+// leaders returned by fetchLeaders() otherwise stay fixed between refreshes.
+export function refreshLeaders(signal?: AbortSignal): Promise<LeadersResponse> {
+  return apiRequest(`/scanner/leaders/refresh/`, { method: "POST", signal });
 }
 
 export function fetchPathSetups(

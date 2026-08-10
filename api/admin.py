@@ -1,3 +1,9 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import LeaderPick
+
+
+@admin.register(LeaderPick)
+class LeaderPickAdmin(admin.ModelAdmin):
+    list_display = ("rank", "ticker", "sector", "added_at")
+    ordering = ("rank",)
