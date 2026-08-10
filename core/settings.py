@@ -7,8 +7,15 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "fallback-dev-key")
-DEBUG = os.getenv("DJANGO_DEBUG", "True") == "True"
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost").split(",")
+DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
+
+# Vercel deployments are reachable through several hostnames at once (the
+# per-deployment hash URL, the project's clean alias, preview URLs, etc.) --
+# a leading dot is Django's wildcard-subdomain syntax, so ".vercel.app"
+# covers all of them without needing to allowlist each one individually.
+ALLOWED_HOSTS = os.getenv(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,.vercel.app"
+).split(",")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -79,5 +86,15 @@ REST_FRAMEWORK = {
 }
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
+    origin.strip()
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
+
+# Preview and production deployments each get their own dynamic *.vercel.app
+# subdomain, so allow any of them rather than needing an exact-match env var
+# per deploy. Safe here: this API is read-only, unauthenticated, and serves
+# no cookies/session state.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
 ]
